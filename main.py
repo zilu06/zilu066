@@ -5,7 +5,6 @@ from datetime import datetime, date
 from zhdate import ZhDate
 import sys
 import os
-import requests
  
  
 def get_color():
@@ -31,35 +30,37 @@ def get_access_token():
     # print(access_token)
     return access_token
  
-#参考文档https://dev.qweather.com/docs/api/geoapi/city-lookup/
-#参考文档https://dev.qweather.com/docs/api/weather/weather-now/
+ 
 def get_weather(region):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.113 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
     }
     key = config["weather_key"]
     region_url = "https://geoapi.qweather.com/v2/city/lookup?location={}&key={}".format(region, key)
     response = get(region_url, headers=headers).json()
-    print(response)
-
-    # 获取地区的location--id
-    location_id = response['location'][0]["id"]
-    
-    weather_url = "https://devapi.qweather.com/v7/weather/3d?location={}&key={}".format(location_id, key)
-    response = get(weather_url, headers=headers).json()
-    # 天气帅达版
-    weather = '白天'+response['daily'][0]["textDay"]+'，'+'傍晚'+response['daily'][0]["textDay"]
-    # 当前温度
-    temp = response['daily'][0]["tempMin"]+ u"\N{DEGREE SIGN}" + "C"+'—'+response['daily'][0]["tempMax"]+ u"\N{DEGREE SIGN}" + "C"
-    if int(response['daily'][0]["tempMin"]) <= 18:
-        xigua = "天气变凉啦，多穿点衣服哦~"
+    if response["code"] == "404":
+        print("推送消息失败，请检查地区名是否有误！")
+        os.system("pause")
+        sys.exit(1)
+    elif response["code"] == "401":
+        print("推送消息失败，请检查和风天气key是否正确！")
+        os.system("pause")
+        sys.exit(1)
     else:
-        xigua = "今天又是很想你的一天~"
+        # 获取地区的location--id
+        location_id = response["location"][0]["id"]
+    weather_url = "https://devapi.qweather.com/v7/weather/now?location={}&key={}".format(location_id, key)
+    response = get(weather_url, headers=headers).json()
+    # 天气
+    weather = response["now"]["text"]
+    # 当前温度
+    temp = response["now"]["temp"] + u"\N{DEGREE SIGN}" + "C"
     # 风向
-    wind_dir = response['daily'][0]["windDirDay"]
-    return weather, temp, wind_dir, xigua
+    wind_dir = response["now"]["windDir"]
+    return weather, temp, wind_dir
  
-#--------关注微信公众号：繁星资源，更多资源等你拿----------
+ 
 def get_birthday(birthday, year, today):
     birthday_year = birthday.split("-")[0]
     # 判断是否为农历生日
@@ -114,7 +115,7 @@ def get_ciba():
     return note_ch, note_en
  
  
-def send_message(to_user, access_token, region_name, weather, temp, xigua, wind_dir, note_ch, note_en):
+def send_message(to_user, access_token, region_name, weather, temp, wind_dir, note_ch, note_en):
     url = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}".format(access_token)
     week_list = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
     year = localtime().tm_year
@@ -171,10 +172,6 @@ def send_message(to_user, access_token, region_name, weather, temp, xigua, wind_
             "note_ch": {
                 "value": note_ch,
                 "color": get_color()
-            },
-            "xigua":{
-                "value": xigua,
-                "color": get_color()
             }
         }
     }
@@ -224,7 +221,7 @@ if __name__ == "__main__":
     users = config["user"]
     # 传入地区获取天气信息
     region = config["region"]
-    weather, temp, wind_dir,xigua = get_weather(region)
+    weather, temp, wind_dir = get_weather(region)
     note_ch = config["note_ch"]
     note_en = config["note_en"]
     if note_ch == "" and note_en == "":
@@ -232,5 +229,5 @@ if __name__ == "__main__":
         note_ch, note_en = get_ciba()
     # 公众号推送消息
     for user in users:
-        send_message(user, accessToken, region, weather, temp, xigua, wind_dir, note_ch, note_en)
+        send_message(user, accessToken, region, weather, temp, wind_dir, note_ch, note_en)
     os.system("pause")
